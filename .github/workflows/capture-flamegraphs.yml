@@ -1,0 +1,56 @@
+# Capture CPU flamegraphs for issue #541 PR evidence.
+# Trigger: gh workflow run capture-flamegraphs.yml -R Tilzen/adblock-rust --ref perf/incremental-filter-set-compilation
+name: Capture flamegraphs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-flamegraphs:
+    name: CPU flamegraphs (master vs PR)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install perf and flamegraph
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-tools-common linux-tools-generic
+          sudo sysctl -w kernel.perf_event_paranoid=1
+          cargo install flamegraph --locked
+
+      - name: Capture master CPU flamegraph (Engine::from_rules path)
+        run: |
+          git checkout master
+          mkdir -p docs/perf/issue-541/images
+          CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph \
+            --bench bench_rules \
+            --output docs/perf/issue-541/images/cpu-before.svg \
+            -- --bench "blocker_new/brave-list" --sample-size 1
+
+      - name: Capture PR CPU flamegraph (FilterSet path)
+        run: |
+          git checkout "${{ github.sha }}"
+          mkdir -p docs/perf/issue-541/images
+          CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph \
+            --bench bench_rules \
+            --output docs/perf/issue-541/images/cpu-after-brave-list.svg \
+            -- --bench "blocker_new/brave-list" --sample-size 1
+          CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph \
+            --bench bench_rules \
+            --output docs/perf/issue-541/images/cpu-after-filter-set.svg \
+            -- --bench "blocker_new/brave-list-filter-set" --sample-size 1
+
+      - name: Upload flamegraph artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issue-541-flamegraphs
+          path: docs/perf/issue-541/images/cpu-*.svg
+          if-no-files-found: error
