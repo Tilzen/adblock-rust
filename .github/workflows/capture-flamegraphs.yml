@@ -44,6 +44,7 @@ jobs:
 
       - name: Capture PR CPU flamegraph
         run: |
+          rm -f examples/profile_brave_list_cpu.rs
           git checkout perf/incremental-filter-set-compilation
           git show perf/incremental-filter-set-compilation:examples/profile_brave_list_cpu.rs \
             > examples/profile_brave_list_cpu.rs
